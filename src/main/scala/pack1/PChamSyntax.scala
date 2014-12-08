@@ -5,14 +5,20 @@ import scala.collection._
 import scala.util.Random
 
 
+/**
+ * Main component of the PCHAM implementation e.g. the 'Solution' holding all the sites
+ * and responsible for disturbing the free events to the sites
+ */
 object Monitor {
   
   val sites = ListBuffer[Site]()
   def registerSite(s: Site) = s +=: sites  
   
+  //list holding all free/escaped events 
   var escapedEvents = ListBuffer[Event]()
   def addEscapedEvent(e: Event) = e +=: escapedEvents
   
+  //method to collect free events from all present sites
   def collectEscapedEvents = escapedEvents ++= sites.flatMap(_.getEscapingEvents) 
   
   // Assigns spare events to sites. Play with different strategies
@@ -24,6 +30,10 @@ object Monitor {
     escapedEvents = ListBuffer[Event]()
   }  
   
+  
+  /**
+   * Main method that starts the Monitor
+   */
   def run = for (i <- 1 to 3) {
     
     printSep("DOING LOCAL MATCH")
@@ -47,7 +57,9 @@ object Monitor {
 }
 
 
-
+/**
+ * class describing an event
+ */
 class Event(name: String) {
   def ! = {
     Monitor.addEscapedEvent(this)
@@ -61,12 +73,14 @@ class Event(name: String) {
 class EventValue(val e: Event)
 
 
-
+/**
+ * class describing a single Handler
+ */
 class Handler(val reactants: List[Event])(val products: List[Event])(body: =>Unit){
   
   override def toString = "HANDLER: " + 
     "[" + reactants(0) + "]" + 
-    reactants.takeRight(reactants.size-1).toString() + " ?  " +
+    reactants.takeRight(reactants.size-1).toString() + " ᐅ  " +
     "[" + products(0) + "]" +
     products.takeRight(products.size-1).toString
   
@@ -76,7 +90,11 @@ object Handler {
 }
 
 
-
+/**
+ * class describing a Site that may hold an arbitrary number of Handlers and initially present events
+ * if a handler of the Site executes the body of the SIte is executed
+ * 
+ */
 class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body: =>Unit) {
   
   var products: List[Event] = initialProducts.map(_.e)
@@ -85,6 +103,12 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
   
   Monitor.registerSite(this)
   
+  //check whether all Handlers have the same precondition
+  {
+    val evt = handlers(0).reactants(0)
+    handlers.foreach( x => if(x.reactants(0) != evt) 
+      throw new IllegalArgumentException("A Site may only compose Handlers with the same precondition Handler \n"+this))
+  }
   //TODO Handler error, site can't be composed of handlers with different preconditions
 
   
@@ -122,23 +146,36 @@ object Site {
 }
 
 
+
+
+/**
+ * Wrapper for an event describing a precondition
+ */
+class PRE(val pre: Event)
+//syntactic sugar for a precondition
 object PRE{
   def apply(pre: Event) = new PRE(pre)
 }
-class PRE(val pre: Event)
 
+
+/**
+ * Wrapper for an describing a postcondition
+ */
+class POST(val post: Event)
+//syntactic sugar for a postcondition 
 object POST{
   def apply(post: Event) = new POST(post)
 }
-class POST(val post: Event)
 
 
-
+/**
+ * simple example of the use of the PCHAM in form of a fire protection system  
+ */
 object FireProtectionSystemExample extends App {
   
   
   
-  
+  //define all events used by the system
   val init = new Event("init");
   val firealarm = new Event("firealarm");
   
@@ -151,9 +188,10 @@ object FireProtectionSystemExample extends App {
 
   
   
-   
+  //define a site 
   Site(List( // Handlers
-        Handler(PRE{init},List(smokeDetected,heatDetected))(POST{firealarm},List(light,horn)){ println("any")}
+        Handler(PRE{init},List(smokeDetected,heatDetected))(POST{firealarm},List(light,horn)){ println("any")},
+        Handler(PRE{init },List(smokeDetected,heatDetected))(POST{firealarm},List(light,horn)){ println("any")}
         ))(List(smokeDetected.v, dummyEvent.v)){  // Inital reactants
     
     // Semantics: the code in the body is executed after the match and before creating the products
@@ -171,14 +209,19 @@ object FireProtectionSystemExample extends App {
   //    light!
   //  }
   
+  
+  //fire the events
   init!
   
   smokeDetected!
-  
-  heatDetected!
 
+  heatDetected!
   
+  //start the monitor
   Monitor.run
+  
+  //no concurrence jet
+  //events have to be fired before the run method is called...
   
 
 }
