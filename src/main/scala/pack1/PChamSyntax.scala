@@ -3,6 +3,7 @@ package pack1
 import scala.collection.mutable._
 import scala.collection._
 import scala.util.Random
+import pack1.Event
 
 
 /**
@@ -23,6 +24,7 @@ object Monitor {
   
   // Assigns spare events to sites. Play with different strategies
   def distributeEscapedEvents() = { 
+    //if(!escapedEvents.contains(Event.bottom))escapedEvents.insert(0, Event.bottom)
     escapedEvents.foreach{e=>
       val randomSite = sites(Random.nextInt(sites.size))
       randomSite.addProduct(e) 
@@ -84,11 +86,14 @@ object Event{
  * class describing a single Handler
  */
 class Handler(val reactants: List[Event])(val products: List[Event])(body: => Unit){
-  
+  /**
+   * execute the body of the handler => fire the handler
+   */
   def ! ={
     body
   }
   
+  //TODO
   override def toString = "HANDLER: " + 
     "[" + reactants(0) + "]" + 
     reactants.takeRight(reactants.size-1).toString() + " ᐅ  " +
@@ -98,6 +103,7 @@ class Handler(val reactants: List[Event])(val products: List[Event])(body: => Un
 }
 object Handler {
   def apply(pre: PRE, reactants: List[Event])(post: POST, products: List[Event])(body: => Unit) = new Handler(pre.pre::reactants)(post.post::products)(body)
+  def apply(reactants: List[Event])(post: POST, products: List[Event])(body: => Unit) = new Handler(Event.bottom::reactants)(post.post::products)(body)
 }
 
 
@@ -108,8 +114,8 @@ object Handler {
  */
 class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body: =>Unit) {
   
-  //initial products e.g. initially present events are all given events and the bottom event
-  var products: List[Event] = Event.bottom :: initialProducts.map(_.e)
+  //initial products e.g. initially present events are all given events
+  var products: List[Event] = initialProducts.map(_.e)
   
   println("declaration: " + this.toString())
   
@@ -117,12 +123,12 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
   Monitor.registerSite(this)
   
   //check whether all Handlers have the same precondition
+  // as a site can't be composed of handlers with different preconditions
   {
     val evt = handlers(0).reactants(0)
     handlers.foreach( x => if(x.reactants(0) != evt) 
       throw new IllegalArgumentException("A Site may only compose Handlers with the same precondition Handler \n"+this))
   }
-  //TODO Handler error, site can't be composed of handlers with different preconditions
 
   
   def addProduct(p: Event) = { val s = p :: products
@@ -130,13 +136,17 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
   }
   
   // The products that do not appear in any of the handlers as reactants 
-  def getEscapingEvents = products.filter(x => !handlers.flatMap(_.reactants).contains(x))
+  def getEscapingEvents = {
+    var escaping = products.filter(x => !handlers.flatMap(_.reactants).contains(x))
+    products = products.filter(!escaping.contains(_))
+    escaping
+    }
           
   // Does not manage duplicate events!
   def getFiringHandlers = handlers.filter(x => x.reactants.toSet subsetOf products.toSet)
   
-  // Dummy implementation
-  def chooseFiringHandler(hs: List[Handler]) = hs(0)
+  // randomly choose which handler should fire
+  def chooseFiringHandler(hs: List[Handler]) = hs(Random.nextInt(hs.size))
   
   override def toString = "SITE[ " + handlers.toString() + 
                           "\n                     ?  " + products.toString + " ]"
@@ -147,10 +157,10 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
     if (!fs.isEmpty) { // At least one handler is firing, else return 
       body // Execute body
       val firingHandler = chooseFiringHandler(fs) // Chose one handler if many are firing
-      firingHandler!	//execute the body of the firing Handler
-      val reactants = firingHandler.reactants    
-      products = products.filter(reactants.contains(_)) // Remove events that match
-      products = if (products.contains(Event.bottom )) products else Event.bottom :: products //add bottom event again if it has been consumed 
+      firingHandler!	//execute the body of the firing Handler //TODO
+      val reactants = firingHandler.reactants
+      //bug, can't handle multiple occurences of a event type and negation missing
+      products = products.filter(!reactants.contains(_)) // Remove events that match      
       products = products ::: firingHandler.products // Add products
     }    
   } 
@@ -202,11 +212,10 @@ object FireProtectionSystemExample extends App {
   val dummyEvent :Event = new Event("dummyEvent")
 
   
-  
   //define a site 
   Site(List( // Handlers
-        Handler(PRE{init},List(smokeDetected,heatDetected))(POST{firealarm},List(light,horn)){ println("any")},
-        Handler(PRE{init },List(smokeDetected,heatDetected))(POST{firealarm},List(light,horn)){ println("any")}
+        Handler(PRE{init},List(smokeDetected,heatDetected))(POST{firealarm},List(light,horn)){ println("any one")},
+        Handler(PRE{init },List(smokeDetected,heatDetected))(POST{firealarm},List(light,horn)){ println("any two")}
         ))(List(smokeDetected.v, dummyEvent.v)){  // Inital reactants
     
     // Semantics: the code in the body is executed after the match and before creating the products
