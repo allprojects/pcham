@@ -43,8 +43,8 @@ object DownloaderExample extends App {
   
   Site(List( // Handlers
         Handler(PRE{k4},List(loading ))(POST{k4},List(progress)){ println( "Download progressing")},
-        Handler(PRE{k3},List(finished  ))(POST{k5},List()){ println("Download cycle finished")},
-        Handler(PRE{k3},List(abborted ))(POST{k5},List()){ println(" Download cycle abborted")}
+        Handler(PRE{k4},List(finished  ))(POST{k5},List()){ println("Download cycle finished")},
+        Handler(PRE{k4},List(abborted ))(POST{k5},List()){ println(" Download cycle abborted")}
         ))(List()){
   }
 

@@ -72,11 +72,22 @@ class Event(name: String) {
 }
 class EventValue(val e: Event)
 
+/**
+ * adds events constants e.g. the Bottom event always present in every Site
+ */
+object Event{
+  val bottom = new Event("bottom");
+}
+
 
 /**
  * class describing a single Handler
  */
-class Handler(val reactants: List[Event])(val products: List[Event])(body: =>Unit){
+class Handler(val reactants: List[Event])(val products: List[Event])(body: => Unit){
+  
+  def ! ={
+    body
+  }
   
   override def toString = "HANDLER: " + 
     "[" + reactants(0) + "]" + 
@@ -97,9 +108,11 @@ object Handler {
  */
 class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body: =>Unit) {
   
-  var products: List[Event] = initialProducts.map(_.e)
+  //initial products e.g. initially present events are all given events and the bottom event
+  var products: List[Event] = Event.bottom :: initialProducts.map(_.e)
   
   println("declaration: " + this.toString())
+  
   
   Monitor.registerSite(this)
   
@@ -134,8 +147,10 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
     if (!fs.isEmpty) { // At least one handler is firing, else return 
       body // Execute body
       val firingHandler = chooseFiringHandler(fs) // Chose one handler if many are firing
+      firingHandler!	//execute the body of the firing Handler
       val reactants = firingHandler.reactants    
       products = products.filter(reactants.contains(_)) // Remove events that match
+      products = if (products.contains(Event.bottom )) products else Event.bottom :: products //add bottom event again if it has been consumed 
       products = products ::: firingHandler.products // Add products
     }    
   } 
