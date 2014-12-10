@@ -3,7 +3,6 @@ package pack1
 import scala.collection.mutable._
 import scala.collection._
 import scala.util.Random
-import pack1.Event
 
 
 /**
@@ -137,9 +136,9 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
   
   // The products that do not appear in any of the handlers as reactants 
   def getEscapingEvents = {
-    var escaping = products.filter(x => !handlers.flatMap(_.reactants).contains(x))
-    products = products.filter(!escaping.contains(_))
-    escaping
+    var escaping = products.filter(x => !handlers.flatMap(_.reactants).contains(x))//collect events not bound by a handler
+    products = products.filter(!escaping.contains(_))//remove the escaping events from site
+    escaping//return the escaping events as a result
     }
           
   // Does not manage duplicate events!
@@ -160,6 +159,7 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
       firingHandler!	//execute the body of the firing Handler //TODO
       val reactants = firingHandler.reactants
       //bug, can't handle multiple occurences of a event type and negation missing
+      //TODO fix the bug... sometime... properly 
       products = products.filter(!reactants.contains(_)) // Remove events that match      
       products = products ::: firingHandler.products // Add products
     }    

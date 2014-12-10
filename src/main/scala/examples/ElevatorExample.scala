@@ -42,17 +42,17 @@ object ElevatorExample extends App {
   
   up!
   
-//  down!
-//  
-//  up!
-//  
-//  down!
-//  
-//  down!
-//  
-//  down!
-//  
-//  up!
+  down!
+  
+  up!
+  
+  down!
+  
+  down!
+  
+  down!
+  
+  up!
   
   
   //lets see what happens!
