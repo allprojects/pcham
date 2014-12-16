@@ -3,6 +3,7 @@ package pack1
 import scala.collection.mutable._
 import scala.collection._
 import scala.util.Random
+import scala.concurrent.Lock
 
 
 /**
@@ -10,9 +11,11 @@ import scala.util.Random
  * and responsible for disturbing the free events to the sites
  */
 object Monitor {
+  var verbose: Boolean = true
   
   val sites = ListBuffer[Site]()
-  def registerSite(s: Site) = s +=: sites  
+  def registerSite(s: Site) = s +=: sites
+  def unregisterSite(s: Site) =  sites-=s  
   
   //list holding all free/escaped events 
   var escapedEvents = ListBuffer[Event]()
@@ -26,6 +29,7 @@ object Monitor {
     //if(!escapedEvents.contains(Event.bottom))escapedEvents.insert(0, Event.bottom)
     escapedEvents.foreach{e=>
       val randomSite = sites(Random.nextInt(sites.size))
+      
       randomSite.addProduct(e) 
     }
     escapedEvents = ListBuffer[Event]()
@@ -35,19 +39,19 @@ object Monitor {
   /**
    * Main method that starts the Monitor
    */
-  def run = for (i <- 1 to 3) {
+  def run = while (escapedEvents.size > 0) {
     
-    printSep("DOING LOCAL MATCH")
-    sites.foreach{_.localMatch}
-    printlAll
-    
-    printSep("Collecting EVENTS")
-    collectEscapedEvents
-    printlAll
-    
-    printSep("DISTRIBUTING EVENTS")
+    if(verbose) printSep("DISTRIBUTING EVENTS")
     distributeEscapedEvents()
-    printlAll
+    if(verbose) printlAll
+    
+    if(verbose)printSep("DOING LOCAL MATCH")
+    sites.foreach{_.localMatch}
+    if(verbose) printlAll
+    
+    if(verbose) printSep("Collecting EVENTS")
+    collectEscapedEvents
+    if(verbose) printlAll
   }
   
   def printSep(s: String) =  println("--" + s + "---------------------------------")
@@ -109,6 +113,7 @@ object Handler {
 /**
  * class describing a Site that may hold an arbitrary number of Handlers and initially present events
  * if a handler of the Site executes the body of the SIte is executed
+ * site is automatically added to the monitor
  * 
  */
 class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body: =>Unit) {
@@ -152,6 +157,7 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
   
   // In a separate thread ?
   def localMatch: Unit = {
+    
     val fs = getFiringHandlers // Select the handlers that fire 
     if (!fs.isEmpty) { // At least one handler is firing, else return 
       body // Execute body
@@ -164,7 +170,6 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
       products = products ::: firingHandler.products // Add products
     }    
   } 
-  
 }
 object Site {
   def apply(handlers: List[Handler])(initialProducts: List[EventValue])(body: =>Unit) = new Site(handlers)(initialProducts)(body)
@@ -241,6 +246,7 @@ object FireProtectionSystemExample extends App {
 
   heatDetected!
   
+  Monitor.verbose =false;
   //start the monitor
   Monitor.run
   

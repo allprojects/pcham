@@ -7,7 +7,7 @@ import pack1._
  * a simple example showing the implementation of a semaphore using the 
  * PCHAM 
  */
-object SemaphoreExample {
+object SemaphoreExample extends App {
   
   //the states
   val green = new Event("State green");
