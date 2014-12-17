@@ -1,4 +1,4 @@
-package examples
+package examples.basic
 
 import pack1._
 
@@ -32,6 +32,7 @@ object ElevatorExample extends App {
       Handler(PRE{level3}, List(down))(POST{level2}, List()){println("Elevator goes from Level 3 down to Level 2")}
       ))(List()){println("Site 3 triggered")}
 
+  //Monitor.verbose = false
   
   //start on Level 1
   level1!
@@ -56,7 +57,7 @@ object ElevatorExample extends App {
   
   
   //lets see what happens!
-  Monitor.run
+  val future = Monitor.runAsync
   
-  
+  Monitor.ec.threadPool.shutdown()
 }

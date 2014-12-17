@@ -1,4 +1,4 @@
-package examples
+package examples.basic
 
 import pack1._
 
