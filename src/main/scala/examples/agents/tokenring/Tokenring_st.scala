@@ -70,7 +70,7 @@ object Tokenring_st extends App {
   var pingpong = new Tokenring(earth, moon, sun);
   earth.send!
   
-  Monitor.verbose =false
+  Monitor.print =false
 
   
   println("tokenring")

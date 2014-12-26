@@ -51,5 +51,5 @@ object DownloaderExample extends App {
   
   init!
   
-  Monitor.run
+  Monitor.finish
 }

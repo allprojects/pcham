@@ -54,5 +54,5 @@ object SemaphoreExample extends App {
   up!
   
   //run the thing
-  Monitor.run
+  Monitor.finish
 }

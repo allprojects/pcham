@@ -29,5 +29,5 @@ object FireProtectionSystemExample3 extends App {
   
   smokeDetected! //fire event
   
-  Monitor.run
+  Monitor.finish
 }

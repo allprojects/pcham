@@ -23,5 +23,5 @@ object FireProtectionSystemExample1 extends App {
   
   heatDetected!
   
-  Monitor.run
+  Monitor.finish
 }

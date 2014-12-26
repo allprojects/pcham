@@ -7,28 +7,70 @@ import scala.async.Async.{ async, await }
 import scala.concurrent.Future
 import scala.actors.threadpool.Executors
 import scala.concurrent.ExecutionContext
-//import scala.concurrent.ExecutionContext.Implicits.global
-
-
-
+import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.ListBuffer
 
 /**
  * Main component of the PCHAM implementation e.g. the 'Solution' holding all the sites
  * and responsible for disturbing the free events to the sites
  */
 object Monitor {
-  
-  implicit val ec = new ExecutionContext {
-    val threadPool = Executors.newFixedThreadPool(10);
 
-    def execute(runnable: Runnable) {
-        threadPool.submit(runnable)
+  var reactions = new java.util.concurrent.atomic.AtomicInteger(0)
+
+  val monitorThread: Thread = new Thread() {
+
+    override def run() = {
+
+      while (!this.isInterrupted()) {
+        //check if some site triggered
+        waitobj.synchronized {
+          if (reactions.get() == 0) {
+            if (finished) {
+              interrupt()
+            } else {
+              waitobj.wait()
+            }
+          }
+          reactions.set(0)
+        }
+
+        if (print) printSep("DISTRIBUTING EVENTS")
+        distributeEscapedEvents()
+        if (print) printlAll
+
+        if (print) printSep("DOING LOCAL MATCH")
+        sites.foreach { x =>
+          {
+            if (x.localMatch)
+              reactions.incrementAndGet()
+          }
+        }
+        if (print) printlAll
+
+        if (print) printSep("Collecting EVENTS")
+        collectEscapedEvents
+        if (print) printlAll
+      }
     }
+  }
 
-    def reportFailure(t: Throwable) {}
-}
+  var finished: Boolean = false
+  //tells the monitor that the programm has ended and it can shout down ones it
+  //computed all results
+  def finish() ={
+    finished =true;
+    waitobj.synchronized{
+      waitobj.notifyAll()
+    }
+  }
   
-  var verbose: Boolean = true
+  //decide whether Monitor should print its state and result
+  var print: Boolean = true
+  def mute()= print=false
+  def verbose() = print =true
+  monitorThread.start()
 
   val sites = ListBuffer[Site]()
   def registerSite(s: Site) = s +=: sites
@@ -41,38 +83,49 @@ object Monitor {
   //method to collect free events from all present sites
   def collectEscapedEvents = escapedEvents ++= sites.flatMap(_.getEscapingEvents)
 
+  /**
+   * filter function for sites returns true if a handler of the given
+   * site needs the given event as one of his reactants
+   */
+  def filter(e: Event, s: Site): Boolean = {
+    for (h <- s.handlers) {
+      if (h.reactants.contains(e))
+        return true //add event only to site that needs it
+    }
+    return false
+  }
+
   // Assigns spare events to sites. Play with different strategies
   def distributeEscapedEvents() = {
     //if(!escapedEvents.contains(Event.bottom))escapedEvents.insert(0, Event.bottom)
     escapedEvents.foreach { e =>
-      val randomSite = sites(Random.nextInt(sites.size))
-      randomSite.addProduct(e)
+      val filteresSites = sites.filter(filter(e, _))
+
+      if (filteresSites.size > 0) {
+        val randomSite = filteresSites(Random.nextInt(filteresSites.size));
+        randomSite.addProduct(e)
+        escapedEvents.remove(escapedEvents.indexOf(e))
+      }
     }
-    escapedEvents = ListBuffer[Event]()
   }
 
-  def runAsync: Future[Unit] = Future {
-    run()
-  }
-  
-  
-
+  val waitobj = new Object
   /**
    * Main method that starts the Monitor
    */
   def run() = for (i <- 0 to 3) {
 
-    if (verbose) printSep("DISTRIBUTING EVENTS")
+    if (print) printSep("DISTRIBUTING EVENTS")
     distributeEscapedEvents()
-    if (verbose) printlAll
+    if (print) printlAll
 
-    if (verbose) printSep("DOING LOCAL MATCH")
+    if (print) printSep("DOING LOCAL MATCH")
     sites.foreach { _.localMatch }
-    if (verbose) printlAll
+    if (print) printlAll
 
-    if (verbose) printSep("Collecting EVENTS")
+    if (print) printSep("Collecting EVENTS")
     collectEscapedEvents
-    if (verbose) printlAll
+    if (print) printlAll
   }
 
   def printSep(s: String) = println("--" + s + "---------------------------------")
@@ -89,6 +142,9 @@ class Event(name: String) {
   def ! = {
     Monitor.addEscapedEvent(this)
     new EventValue(this)
+    Monitor.waitobj.synchronized {
+      Monitor.waitobj.notifyAll()
+    }
   }
 
   def v = {
@@ -140,7 +196,7 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
   //initial products e.g. initially present events are all given events
   var products: List[Event] = initialProducts.map(_.e)
 
-  println("declaration: " + this.toString())
+  if(Monitor.print)println("declaration: " + this.toString())
 
   Monitor.registerSite(this)
 
@@ -153,8 +209,10 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
   }
 
   def addProduct(p: Event) = {
-    val s = p :: products
-    products = s
+    this.synchronized {
+      val s = p :: products
+      products = s
+    }
   }
 
   // The products that do not appear in any of the handlers as reactants 
@@ -165,7 +223,19 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
   }
 
   // Does not manage duplicate events!
-  def getFiringHandlers = handlers.filter(x => x.reactants.toSet subsetOf products.toSet)
+  def getFiringHandlers = handlers.filter(handlerIsTriggered(_))
+
+  private def handlerIsTriggered(handler: Handler): Boolean = {
+    val react = handler.reactants.to[ListBuffer]
+    products.foreach(x => {
+      if (react.contains(x))
+        react.remove(react.indexOf(x))
+
+      if (react.isEmpty)
+        return true
+    })
+    return false
+  }
 
   // randomly choose which handler should fire
   def chooseFiringHandler(hs: List[Handler]) = hs(Random.nextInt(hs.size))
@@ -174,8 +244,7 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
     "\n                     ?  " + products.toString + " ]"
 
   // In a separate thread ?
-  def localMatch: Unit = {
-
+  def localMatch: Boolean = {
     val fs = getFiringHandlers // Select the handlers that fire 
     if (!fs.isEmpty) { // At least one handler is firing, else return 
       body // Execute body
@@ -184,9 +253,19 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
       val reactants = firingHandler.reactants
       //bug, can't handle multiple occurences of a event type and negation missing
       //TODO fix the bug... sometime... properly 
-      products = products.filter(!reactants.contains(_)) // Remove events that match      
+      val react = reactants.to[ListBuffer]
+      products = products.filter(x => {
+        if (!react.contains(x)) {
+          true
+        } else {
+          react.remove(react.indexOf(x))
+          false
+        }
+      }) // Remove events that match      
       products = products ::: firingHandler.products // Add products
+      return true
     }
+    return false
   }
 }
 object Site {
@@ -228,15 +307,16 @@ object FireProtectionSystemExample extends App {
   val dummyEvent: Event = new Event("dummyEvent")
 
   //define a site 
-  Site(List( // Handlers
+  val s = Site(List( // Handlers
     Handler(PRE { init }, List(smokeDetected, heatDetected))(POST { firealarm }, List(light, horn)) { println("any one") },
-    Handler(PRE { init }, List(smokeDetected, heatDetected))(POST { firealarm }, List(light, horn)) { println("any two") }))(List(smokeDetected.v, dummyEvent.v)) { // Inital reactants
+    Handler(PRE { init }, List(smokeDetected, smokeDetected, heatDetected))(POST { firealarm }, List(light, horn)) { println("any two") }))(List()) { // Inital reactants
 
     // Semantics: the code in the body is executed after the match and before creating the products
 
     println("Site executed!")
 
   }
+  
 
   // if (file empty){
   //    ...
@@ -249,15 +329,10 @@ object FireProtectionSystemExample extends App {
   smokeDetected!
 
   heatDetected!
-
-  Monitor.verbose = true;
-  //start the monitor
-  Monitor.runAsync
   
-
-  //no concurrence jet
-  //events have to be fired before the run method is called...
-
+  //tell the monitor no more events will arrive
+  //else it runs infinitely
+  Monitor.finish
 }
 
 

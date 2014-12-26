@@ -70,7 +70,7 @@ object Pingpong_st extends App {
   var pingpong = new Pingpong(earth, moon, sun);
   earth.send!
   
-  Monitor.verbose =false
+  Monitor.print =true
 
   
   println("pingpong cycle")
