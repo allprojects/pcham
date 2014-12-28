@@ -306,10 +306,11 @@ object FireProtectionSystemExample extends App {
 
   val dummyEvent: Event = new Event("dummyEvent")
 
+
   //define a site 
   val s = Site(List( // Handlers
     Handler(PRE { init }, List(smokeDetected, heatDetected))(POST { firealarm }, List(light, horn)) { println("any one") },
-    Handler(PRE { init }, List(smokeDetected, smokeDetected, heatDetected))(POST { firealarm }, List(light, horn)) { println("any two") }))(List()) { // Inital reactants
+    Handler(PRE { init }, List(smokeDetected, heatDetected))(POST { firealarm }, List(light, horn)) { println("any two") }))(List()) { // Inital reactants
 
     // Semantics: the code in the body is executed after the match and before creating the products
 

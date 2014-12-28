@@ -18,6 +18,7 @@ object FireProtectionSystemExample2 extends App {
   val releaseGas = new Event("releaseGas");
   val releaseAgent = new Event("releaseAgent");
   
+  Monitor.mute
   Site(List( // Handlers
         Handler(PRE{fireAlarm },List(smokeDetected))(POST{releaseGas},List()){println("Gas will be released")},
         // Handler(PRE{init },List(smokeDetected))(POST{releaseAgent},List()){println("Agent is being released")}, 
