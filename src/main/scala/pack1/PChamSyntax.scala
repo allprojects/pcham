@@ -59,17 +59,17 @@ object Monitor {
   var finished: Boolean = false
   //tells the monitor that the programm has ended and it can shout down ones it
   //computed all results
-  def finish() ={
-    finished =true;
-    waitobj.synchronized{
+  def finish() = {
+    finished = true;
+    waitobj.synchronized {
       waitobj.notifyAll()
     }
   }
-  
+
   //decide whether Monitor should print its state and result
   var print: Boolean = true
-  def mute()= print=false
-  def verbose() = print =true
+  def mute() = print = false
+  def verbose() = print = true
   monitorThread.start()
 
   val sites = ListBuffer[Site]()
@@ -196,17 +196,17 @@ class Site(val handlers: List[Handler])(initialProducts: List[EventValue])(body:
   //initial products e.g. initially present events are all given events
   var products: List[Event] = initialProducts.map(_.e)
 
-  if(Monitor.print)println("declaration: " + this.toString())
+  if (Monitor.print) println("declaration: " + this.toString())
 
   Monitor.registerSite(this)
 
   //check whether all Handlers have the same precondition
   // as a site can't be composed of handlers with different preconditions
-  {
-    val evt = handlers(0).reactants(0)
-    handlers.foreach(x => if (x.reactants(0) != evt)
-      throw new IllegalArgumentException("A Site may only compose Handlers with the same precondition Handler \n" + this))
-  }
+    {
+      val evt = handlers(0).reactants(0)
+      handlers.foreach(x => if (x.reactants(0) != evt)
+        throw new IllegalArgumentException("A Site may only compose Handlers with the same precondition Handler \n" + this))
+    }
 
   def addProduct(p: Event) = {
     this.synchronized {
@@ -306,18 +306,14 @@ object FireProtectionSystemExample extends App {
 
   val dummyEvent: Event = new Event("dummyEvent")
 
-
   //define a site 
   val s = Site(List( // Handlers
     Handler(PRE { init }, List(smokeDetected, heatDetected))(POST { firealarm }, List(light, horn)) { println("any one") },
-    Handler(PRE { init }, List(smokeDetected, heatDetected))(POST { firealarm }, List(light, horn)) { println("any two") }))(List()) { // Inital reactants
-
-    // Semantics: the code in the body is executed after the match and before creating the products
-
-    println("Site executed!")
-
-  }
-  
+    Handler(PRE { init }, List(smokeDetected, heatDetected))(POST { firealarm }, List(light, horn)) { println("any two") }
+    ))(List()) { // Inital reactants
+      // Semantics: the code in the body is executed after the match and before creating the products
+      println("Site executed!")
+    }
 
   // if (file empty){
   //    ...
@@ -330,7 +326,7 @@ object FireProtectionSystemExample extends App {
   smokeDetected!
 
   heatDetected!
-  
+
   //tell the monitor no more events will arrive
   //else it runs infinitely
   Monitor.finish

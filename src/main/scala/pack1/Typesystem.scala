@@ -1,43 +1,87 @@
 package pack1
 
+import scala.collection.mutable.Set
+
+
+/**
+ * the typesystem itself which may receive an program in the form of a List an tell whether the program is valid or not
+ */
 object Typesystem {
 
+  /**
+   * Method to validate an entire program
+   * returns true if none of the rules of the calculus was violated
+   * false otherwise
+   */
   def validate(program: List[Any]): Boolean = {
     if (program.isEmpty)
       return true
 
-    return validate(program.tail)
-  }
-
-  val blub = Type.linG
-
-  def newType(a: Type.Type, b: Type.Type): Type.Type = {
-    (a, b) match {
-      case (_, Type.invalid) => Type.invalid
-      case (Type.invalid, _) => Type.invalid
-      case (_, Type.g) => a
-      case (Type.g, _) => b
-      case _ => Type.g
+    var res = false
+    if (program.head.isInstanceOf[Site]) {
+      res = validateSite(program.head.asInstanceOf[Site], program)
+    } else if (program.head.isInstanceOf[Event]) {
+      res = validateEvent(program.head.asInstanceOf[Event], program)
     }
+    if (res)
+      return validate(program.tail)
+    else
+      return false
   }
 
-  def newTypeSite(a: Type.Type, b: Type.Type): Type.Type = {
+  /**
+   * Method to validate a single site in the context of a given program
+   */
+  def validateSite(s: Site, program: List[Any]): Boolean = {
+    var events = Set[Event]()
+    for (h <- s.handlers)
+      events = events ++ h.reactants ++ h.products
+
+    for (e <- events)
+      if (!validateEvent(e, program))
+        return false
+
+    return true
+  }
+
+  /**
+   * Method to validate a single event in the context of a given program
+   */
+  def validateEvent(e: Event, program: List[Any]): Boolean = {
+    var typecount = Array.fill[Int](Type.maxId+1)(0)
+    
+    //TODO implement
+    for(element <- program){
+      val etype = getTypeOf(e, element)
+      typecount(etype.id)=typecount(etype.id)+1
+    }
+
+    return BasicRuleSet(typecount)
+  }
+
+  /**
+   * Method to get the new type of an event if it has different types within a site
+   */
+  def newType(a: Type.Type, b: Type.Type): Type.Type = {
     (a, b) match {
       case (`b`, _) => a
       case (Type.g, Type.p) => Type.g
       case (Type.g, Type.linP) => Type.linG
       case (Type.linG, Type.linP) => Type.linG
-      case (Type.g , Type.linR) => Type.linR
-      case (Type.invalid , _) => Type.invalid
-      case (_ , Type.invalid) => Type.invalid      
+      case (Type.g, Type.linR) => Type.linR
+      case (Type.invalid, _) => Type.invalid
+      case (_, Type.invalid) => Type.invalid
       case (Type.linR, _) => Type.invalid
       case (_, Type.linR) => Type.invalid
       case (Type.void, _) => b
       case (_, Type.void) => a
-      case _ => Type.void 
+      case _ => a
     }
   }
 
+  /**
+   * returns the type of the given event in the context of s according to the pcham calculus
+   */
   def getTypeOf(e: Event, s: Any): Type.Type = {
     s match {
       case e2: Event => getTypeOf(e, e2)
@@ -47,14 +91,20 @@ object Typesystem {
     }
   }
 
+  /**
+   * returns the type of the given event within the given site
+   */
   def getTypeOf(e: Event, s: Site): Type.Type = {
-    var currType = Type.g
+    var currType = if (s.handlers.size > 0) getTypeOf(e, s.handlers.head) else Type.void
     for (h <- s.handlers) {
-      currType = newTypeSite(currType, getTypeOf(e, h))
+      currType = newType(currType, getTypeOf(e, h))
     }
     currType
   }
 
+  /**
+   * returns the type of the given event within the given handler
+   */
   def getTypeOf(e: Event, s: Handler): Type.Type = {
     if (s.reactants(0) == e)
       Type.linR
@@ -65,9 +115,14 @@ object Typesystem {
     else if (s.products.contains(e))
       Type.p
     else
-      Type.g
+      Type.void
   }
 
+  /**
+   * returns the type of the given event within the given event
+   *
+   * note: only added for completeness e.g. to simplify the implementation
+   */
   def getTypeOf(e: Event, s: Event): Type.Type = {
     if (e == s)
       Type.g
@@ -77,9 +132,29 @@ object Typesystem {
 
 }
 
+/**
+ * the types an event can be categorized as by the typesystem
+ */
 object Type extends Enumeration {
   type Type = Value
   val linR, linP, linG, g, r, p, void, invalid = Value
+}
+
+trait Rule {
+  def apply(types: Array[Int]): Boolean
+}
+
+object Rule {
+  def apply(x: Array[Int] => Boolean) = new Rule() { def apply(types: Array[Int]): Boolean = x(types) }
+}
+
+object BasicRuleSet {
+  val set: Set[Rule] = Set.empty
+
+  def apply(x: Array[Int]): Boolean = {
+    set.foreach(r => if (!r(x)) return false)
+    return true
+  }
 }
 
 object test extends App {
@@ -98,17 +173,16 @@ object test extends App {
   //define a site 
   val s = Site(List( // Handlers
     Handler(PRE { init }, List(smokeDetected, heatDetected))(POST { firealarm }, List(light, horn)) { println("any one") },
-    Handler(PRE { init }, List(smokeDetected, heatDetected))(POST { firealarm }, List(light, horn)) { println("any two") }))(List()) { // Inital reactants
-
+    Handler(PRE { init }, List(smokeDetected, heatDetected))(POST { firealarm }, List(light, horn)) { println("any two") },
+    Handler(PRE { init }, List(smokeDetected, dummyEvent))(POST { firealarm }, List(light, horn)) { println("any three") }))(List()) { // Inital reactants
     // Semantics: the code in the body is executed after the match and before creating the products
-
     println("Site executed!")
   }
 
-  println("init " + Typesystem.getTypeOf(init, s))
-  println("firealarm " + Typesystem.getTypeOf(firealarm, s))
-  println("smokeDetected " + Typesystem.getTypeOf(smokeDetected, s))
-  println("heatDetected " + Typesystem.getTypeOf(heatDetected, s))
-
+  
+  
+  val program = List(dummyEvent , s)
+  println(Typesystem.validateEvent(dummyEvent , program))
+  
   Monitor.finish
 }
