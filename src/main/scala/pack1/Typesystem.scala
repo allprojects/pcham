@@ -48,7 +48,7 @@ object Typesystem {
    * Method to validate a single event in the context of a given program
    */
   def validateEvent(e: Event, program: List[Any]): Boolean = {
-    var typecount = Array.fill[Int](Type.maxId+1)(0)
+    var typecount = Array.fill[Int](Type.maxId)(0)
     
     //TODO implement
     for(element <- program){
@@ -140,6 +140,14 @@ object Type extends Enumeration {
   val linR, linP, linG, g, r, p, void, invalid = Value
 }
 
+/**
+ * a rule that has to hold for the whole program
+ * the array counts how often the currently checked
+ * event occurs in the program as a specific type 
+ * 
+ * should return true if the rule holds e.g everything is alright
+ * and false otherwise 
+ */
 trait Rule {
   def apply(types: Array[Int]): Boolean
 }
@@ -148,8 +156,21 @@ object Rule {
   def apply(x: Array[Int] => Boolean) = new Rule() { def apply(types: Array[Int]): Boolean = x(types) }
 }
 
+/**
+ * object holding the basic rules of pcham
+ */
 object BasicRuleSet {
   val set: Set[Rule] = Set.empty
+  
+  //add rule: precondition may only used by one site
+  set+= Rule(x=> x(Type.linR.id)<2)
+  
+  //add rule: reactant may only used by one site
+  set+= Rule(x=> x(Type.linR.id)<2)
+  
+  //add rule: precondition may not occur as a reactant
+  set+= Rule(x=> !(x(Type.linR.id)>0 & x(Type.r.id)>0))
+  
 
   def apply(x: Array[Int]): Boolean = {
     set.foreach(r => if (!r(x)) return false)
@@ -182,7 +203,8 @@ object test extends App {
   
   
   val program = List(dummyEvent , s)
-  println(Typesystem.validateEvent(dummyEvent , program))
+  //val program = List(dummyEvent , s, s) //would be categorized as invalid
+  println(Typesystem.validateEvent(init , program))
   
   Monitor.finish
 }
